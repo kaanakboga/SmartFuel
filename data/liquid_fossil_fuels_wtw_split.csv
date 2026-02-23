@@ -1,0 +1,8 @@
+fuel_class,fuel_type,lhv_mj_per_kg,cf_gco2_per_gfuel,wtw_total_gco2e_per_mj,ttw_co2_gco2_per_mj,wtt_plus_nonco2_gco2e_per_mj
+Ağır Yakıt,HFO (Heavy Fuel Oil),40.5,3.114,91.6,76.889,14.711
+Hafif Yakıt,LFO (Light Fuel Oil),40.6,3.151,91.1,76.854,14.246
+Motorin,MGO / MDO,42.7,3.206,91.5,75.082,16.418
+Ağır Yakıt,VLSFO (Very Low Sulfur Fuel Oil),41.0,3.114,92.1,75.951,15.649
+Sıvı Gaz,LPG (Propane),46.3,3.0,83.6,64.795,18.805
+Sıvı Gaz,LPG (Butane),45.7,3.03,84.3,66.302,17.998
+LNG,LNG,49.1,2.750,0,55.990,18.5
