@@ -1,0 +1,9 @@
+fuel_class,fuel_type,lhv_mj_per_kg,cf_gco2_per_gfuel,wtw_total_gco2e_per_mj,ttw_co2_gco2_per_mj,wtt_plus_nonco2_gco2e_per_mj
+liquid_fossil,HFO,40.5,3.114,90.388889,76.888889,13.500000
+liquid_fossil,LFO,40.6,3.151,90.810837,77.610837,13.200000
+liquid_fossil,MGO / MDO,42.7,3.206,89.481967,75.081967,14.400000
+liquid_fossil,VLSFO,41.0,3.114,90.451220,75.951220,14.500000
+liquid_fossil,LPG (Propane),46.3,3.000,78.794816,64.794816,14.000000
+liquid_fossil,LPG (Butane),45.7,3.030,80.301969,66.301969,14.000000
+liquid_fossil,LNG (Otto MS),49.1,2.750,74.508147,56.008147,18.500000
+liquid_fossil,LNG (Diesel SS),49.1,2.750,74.508147,56.008147,18.500000

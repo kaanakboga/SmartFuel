@@ -25,7 +25,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--path",
             type=str,
-            default="data/liquid_fossil_fuels_wtw_split.csv",
+            default="data/liquid_fossil_fuels_wtw_split_v2.csv",
             help="Path to CSV file",
         )
 

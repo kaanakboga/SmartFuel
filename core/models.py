@@ -120,7 +120,10 @@ class VoyageLeg(models.Model):
         "LFO": ["LFO (Light Fuel Oil)", "LFO"],
         "MGO": ["MGO / MDO", "MGO", "MDO"],
         "VLSFO": ["VLSFO (Very Low Sulfur Fuel Oil)", "VLSFO"],
-        "LNG": ["LNG"],
+
+        # LNG varyantlarını da ekle
+        "LNG": ["LNG", "LNG (Otto MS)", "LNG (Diesel SS)"],
+
     }
 
     def _build_fuel_amount_cache(self) -> dict[str, Decimal]:
@@ -222,37 +225,45 @@ class VoyageLeg(models.Model):
             ft_upper = (item.fuel.fuel_type or "").upper()
 
             # LNG component hesap
+            # LNG component hesap
             if "LNG" in ft_upper:
-                scope = self.scope_factor
-                if scope is None:
-                    return None
-
-                WTT_G_PER_MJ = Decimal("18.5")
                 GWP_CH4 = Decimal("28")
                 GWP_N2O = Decimal("265")
-                LNG_LHV = Decimal("49.1")
 
-                # Enerji (SCOPE'SUZ)
-                e_mj_raw = amt * LNG_LHV
+                lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
+                if lhv == 0:
+                    return None
 
-                # A) WTT (scope’suz enerjiden)
-                wtt_g = e_mj_raw * WTT_G_PER_MJ
+                # Enerji (scope'suz)
+                e_mj_raw = amt * lhv
 
-                # B) CO2 (g/kg)
-                co2_g_per_kg = (item.fuel.cf_gco2_per_gfuel or Decimal("0")) * Decimal("1000")
-                co2_g = amt * co2_g_per_kg
+                # A) WTT + upstream non-CO2 (g/MJ) -> DB'den
+                wtt_factor = item.fuel.wtt_plus_nonco2_gco2e_per_mj
+                if wtt_factor is None:
+                    # DB boşsa fallback (senin tablodaki LNG WTT)
+                    wtt_factor = Decimal("18.5")
+                wtt_g = e_mj_raw * wtt_factor
+
+                # B) TTW CO2 (g/MJ) -> DB'den (varsa)
+                ttw_co2_factor = item.fuel.ttw_co2_gco2_per_mj
+                if ttw_co2_factor is None:
+                    # yoksa cf üzerinden türet
+                    cf = item.fuel.cf_gco2_per_gfuel or Decimal("0")  # gCO2/gFuel (kg/kg gibi)
+                    # cf burada "kg/kg" mantığında tutuluyorsa (2.75 gibi), g/kg'ye çevir
+                    co2_g_per_kg = cf * Decimal("1000")
+                    ttw_co2_factor = co2_g_per_kg / lhv
+                co2_g = e_mj_raw * ttw_co2_factor
 
                 # C) CH4 slip (%)
                 slip_pct = (item.ch4_slip_pct or Decimal("0"))
                 ch4_mass_kg = amt * (slip_pct / Decimal("100"))
                 ch4_g = ch4_mass_kg * GWP_CH4 * Decimal("1000")
 
-                # D) N2O factor.
+                # D) N2O factor (kg N2O / kg fuel)
                 n2o_factor = (item.n2o_factor or Decimal("0"))
                 n2o_mass_kg = amt * n2o_factor
                 n2o_g = n2o_mass_kg * GWP_N2O * Decimal("1000")
 
-                # Scope en sonda hepsine uygulanır
                 total += (wtt_g + co2_g + ch4_g + n2o_g) * scope
 
             else:
@@ -286,11 +297,8 @@ class VoyageLeg(models.Model):
             if amt == 0:
                 continue
 
-            ft = (item.fuel.fuel_type or "").upper()
-            if "LNG" in ft:
-                fuel_energy += (amt * Decimal("49.1")) * scope
-            else:
-                fuel_energy += (amt * item.fuel.lhv_mj_per_kg) * scope
+            lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
+            fuel_energy += (amt * lhv) * scope
 
         shore = (self.shore_power_energy_mj or Decimal("0")) * scope
         return fuel_energy + shore
@@ -336,35 +344,85 @@ class VoyageLegFuel(models.Model):
         return "LNG" in ft
 
     def clean(self):
-        if self.is_lng():
-            if not self.lng_engine_mode:
-                raise ValidationError({"lng_engine_mode": "LNG seçilince motor tipi zorunlu."})
+        super().clean()
 
-            if self.lng_engine_mode == "CERT":
-                if self.ch4_slip_pct is None:
-                    raise ValidationError({"ch4_slip_pct": "Certified actual için CH4 slip (%) zorunlu."})
-                if self.n2o_factor is None:
-                    raise ValidationError({"n2o_factor": "Certified actual için N2O factor zorunlu."})
-        else:
-            if self.lng_engine_mode or self.ch4_slip_pct is not None or self.n2o_factor is not None:
-                raise ValidationError("LNG alanları sadece LNG yakıtında kullanılabilir.")
+        # LNG değilse bu alanlar boş olmalı
+        if not self.is_lng():
+            if self.lng_engine_mode:
+                raise ValidationError({"lng_engine_mode": "Bu alan sadece LNG için kullanılabilir."})
+            if self.ch4_slip_pct is not None:
+                raise ValidationError({"ch4_slip_pct": "Bu alan sadece LNG için kullanılabilir."})
+            if self.n2o_factor is not None:
+                raise ValidationError({"n2o_factor": "Bu alan sadece LNG için kullanılabilir."})
+            return
+
+        # LNG ise engine mode fuel_type'tan otomatik belirleniyor.
+        ft = ((self.fuel.fuel_type or "") if self.fuel else "").upper()
+
+        auto_mode = None
+        if "DIESEL" in ft:
+            auto_mode = "DIESEL"
+        elif "OTTO" in ft:
+            auto_mode = "OTTO"
+        elif "CERT" in ft or "CERTIFIED" in ft:
+            auto_mode = "CERT"
+
+        # eğer yakaladık ise instance'a yaz
+        if auto_mode:
+            self.lng_engine_mode = auto_mode
+
+        # Certified actual seçeneği kullanıyorsan, o zaman kullanıcı slip/n2o girmeli
+        if self.lng_engine_mode == "CERT":
+            if self.ch4_slip_pct is None:
+                raise ValidationError({"ch4_slip_pct": "Certified actual için CH4 slip girilmesi zorunlu."})
+            if self.n2o_factor is None:
+                raise ValidationError({"n2o_factor": "Certified actual için N2O factor girilmesi zorunlu."})
 
     def save(self, *args, **kwargs):
-        # Otto/Diesel seçildiyse default atayalım (diesel defaultlarını sonra netleştiririz)
-        if self.is_lng() and self.lng_engine_mode in ("OTTO", "DIESEL"):
+        # LNG değilse direkt kaydet
+        if not self.is_lng():
+            return super().save(*args, **kwargs)
+
+        ft_upper = ((self.fuel.fuel_type or "") if self.fuel else "").upper()
+
+        # Fuel'dan engine mode'u otomatik belirle
+        if "DIESEL" in ft_upper:
+            self.lng_engine_mode = "DIESEL"
+        elif "OTTO" in ft_upper:
+            self.lng_engine_mode = "OTTO"
+        elif "CERT" in ft_upper or "CERTIFIED" in ft_upper:
+            self.lng_engine_mode = "CERT"
+        else:
+            # LNG ama isim yakalanmadıysa - boş bırakma, otto fallback (istersen)
+            self.lng_engine_mode = "OTTO"
+
+        # Önceki fuel'u yakala (fuel değişince defaultlar yeniden basılsın)
+        prev_fuel_id = None
+        if self.pk:
+            prev_fuel_id = (
+                VoyageLegFuel.objects
+                .filter(pk=self.pk)
+                .values_list("fuel_id", flat=True)
+                .first()
+            )
+        fuel_changed = (prev_fuel_id is not None and prev_fuel_id != self.fuel_id)
+
+        # CERT: kullanıcı girecekse burada override ETME (istersen)
+        # Ama sen "hiç seçim olmasın, otomatik gelsin" diyorsun.
+        # CERT seçeneği kullanmayacaksan bu blok seni etkilemez.
+        if self.lng_engine_mode == "CERT":
+            return super().save(*args, **kwargs)
+
+        # Otto/Diesel defaultlarını bas (yeni kayıt veya fuel değişimi)
+        if self._state.adding or fuel_changed:
             if self.lng_engine_mode == "OTTO":
-                if self.ch4_slip_pct is None:
-                    self.ch4_slip_pct = Decimal("3.1")
-                if self.n2o_factor is None:
-                    self.n2o_factor = Decimal("0.00011")
+                self.ch4_slip_pct = Decimal("3.1")
+                self.n2o_factor = Decimal("0.00011")
+            elif self.lng_engine_mode == "DIESEL":
+                self.ch4_slip_pct = Decimal("0.2")
+                self.n2o_factor = Decimal("0.00011")
 
-            if self.lng_engine_mode == "DIESEL":
-                if self.ch4_slip_pct is None:
-                    self.ch4_slip_pct = Decimal("0")
-                if self.n2o_factor is None:
-                    self.n2o_factor = Decimal("0")
-
-        super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.voyage_leg.vrn} - {self.fuel.fuel_type} ({self.amount_kg} kg)"

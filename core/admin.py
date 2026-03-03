@@ -32,7 +32,7 @@ class VoyageLegFuelInline(admin.TabularInline):
     model = VoyageLegFuel
     extra = 1
     autocomplete_fields = ("fuel",)
-    fields = ("fuel", "amount_kg", "lng_engine_mode", "ch4_slip_pct", "n2o_factor")
+    fields = ("fuel", "amount_kg", "ch4_slip_pct", "n2o_factor")  # lng_engine_mode YOK
 
 
 @admin.register(VoyageLeg)
