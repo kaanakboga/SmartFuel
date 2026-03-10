@@ -74,13 +74,12 @@
     </a>
     <div id="collapseTables" class="collapse" aria-labelledby="headingTables" data-parent="#accordionSidebar">
       <div class="bg-white py-2 collapse-inner rounded">
-        <h6 class="collapse-header">Data Tables:</h6>
-        <a class="collapse-item" href="{% url 'tables' %}">Ships</a>
-        <a class="collapse-item" href="{% url 'voyage_legs' %}">Route Legs</a>
-
-        <!-- yeni sayfa linki -->
-        <a class="collapse-item" href="{% url 'voyage_legs_report' %}">Voyage Report</a>
-      </div>
+  <h6 class="collapse-header">Data Tables:</h6>
+  <a class="collapse-item" href="{% url 'tables' %}">Ships</a>
+  <a class="collapse-item" href="{% url 'voyage_legs' %}">Route Legs</a>
+  <a class="collapse-item" href="{% url 'voyage_legs_report' %}">Voyage Report</a>
+  <a class="collapse-item" href="{% url 'fuels_reference' %}">Fuel Reference</a>
+</div>
     </div>
   </li>
 

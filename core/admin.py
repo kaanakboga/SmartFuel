@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import GeneralSetting, Ship, Port, Fuel, VoyageLeg, VoyageLegFuel
-
+from django.contrib.admin.sites import site
 
 @admin.register(GeneralSetting)
 class GeneralSettingAdmin(admin.ModelAdmin):
@@ -24,15 +24,33 @@ class PortAdmin(admin.ModelAdmin):
 
 @admin.register(Fuel)
 class FuelAdmin(admin.ModelAdmin):
-    list_display = ("fuel_type", "fuel_class", "lhv_mj_per_kg", "wtw_total_gco2e_per_mj")
-    search_fields = ("fuel_type", "fuel_class")
+    list_display = (
+        "fuel_type",
+        "fuel_class",
+        "fuel_group",
+        "lhv_mj_per_kg",
+        "wtt_plus_nonco2_gco2e_per_mj",
+        "ttw_co2_gco2_per_mj",
+        "cf_gco2_per_gfuel",
+        "cf_ch4_ratio",
+        "cf_n2o_ratio",
+        "wtw_total_gco2e_per_mj",
+    )
+    search_fields = ("fuel_type", "fuel_class", "fuel_group")
+    list_filter = ("fuel_group", "fuel_class")
 
 
-class VoyageLegFuelInline(admin.TabularInline):
+class VoyageLegFuelInline(admin.StackedInline):
     model = VoyageLegFuel
     extra = 1
     autocomplete_fields = ("fuel",)
-    fields = ("fuel", "amount_kg", "ch4_slip_pct", "n2o_factor")  # lng_engine_mode YOK
+
+    # CH4/N2O formda dursun ki LNG seçince doldurabilelim,
+    # ama JS ile LNG değilse gizleyeceğiz.
+    fields = ("fuel", "amount_kg", "ch4_slip_pct", "n2o_factor")
+
+    class Media:
+        js = ("core/js/voyage_leg_fuel_inline_toggle.js",)
 
 
 @admin.register(VoyageLeg)
@@ -43,35 +61,27 @@ class VoyageLegAdmin(admin.ModelAdmin):
         "route_leg_type",
         "departure_dt",
         "arrival_dt",
-        "total_ghg_tco2e_display",
+        "scope_factor",
+        "total_energy_mj_scoped",
+        "total_ghg_tco2e",
+        "ghg_intensity_g_per_mj",
     )
     search_fields = ("vrn", "departure_port__code", "arrival_port__code")
     list_filter = ("departure_port__is_eu", "arrival_port__is_eu")
-    autocomplete_fields = ("departure_port", "arrival_port")
-    inlines = (VoyageLegFuelInline,)
 
-    fields = (
-        "voyage_report_type_name",
-        "distance",
-        "departure_port",
-        "arrival_port",
-        "departure_dt",
-        "arrival_dt",
-        "shore_power_energy_mj",
-    )
-
+    # VRN otomatik üretiliyor; kullanıcı elle girmesin
     readonly_fields = ("vrn",)
 
-    @admin.display(description="Total GHG (tCO2e)")
-    def total_ghg_tco2e_display(self, obj):
-        v = obj.total_ghg_tco2e
-        return "-" if v is None else f"{v:.6f}"
+    inlines = [VoyageLegFuelInline]
 
+# Global admin JS (inline Media bazen yüklenmiyor, bunu kesin yükler)
+class AdminGlobalMedia:
+    class Media:
+        js = ("core/js/voyage_leg_fuel_inline_toggle.js",)
 
-@admin.register(VoyageLegFuel)
-class VoyageLegFuelAdmin(admin.ModelAdmin):
-    list_display = ("voyage_leg", "fuel", "amount_kg", "lng_engine_mode", "ch4_slip_pct", "n2o_factor")
-    search_fields = ("voyage_leg__vrn", "fuel__fuel_type")
-    list_filter = ("fuel__fuel_type", "lng_engine_mode")
-    autocomplete_fields = ("voyage_leg", "fuel")
-    fields = ("voyage_leg", "fuel", "amount_kg", "lng_engine_mode", "ch4_slip_pct", "n2o_factor")
+site._global_media = AdminGlobalMedia.Media
+# IMPORTANT:
+# VoyageLegFuel'u ayrı admin sayfasından kaldırıyoruz.
+# Çünkü asıl doğru kullanım inline üzerinden.
+# Böylece soldaki menüde "Voyage leg fuels" da kaybolur.
+# (Django admin otomatik olarak register edilmez.)

@@ -25,7 +25,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--path",
             type=str,
-            default="data/liquid_fossil_fuels_wtw_split_v2.csv",
+            default="data/liquid_fossil_fuels_wtw_split.csv",
             help="Path to CSV file",
         )
 
@@ -39,9 +39,13 @@ class Command(BaseCommand):
         key_field = "fuel_type" if "fuel_type" in model_fields else "name"
         fuel_class_field = "fuel_class" if "fuel_class" in model_fields else None
 
+        fuel_group_field = "fuel_group" if "fuel_group" in model_fields else None
+        cf_ch4_field = "cf_ch4_ratio" if "cf_ch4_ratio" in model_fields else None
+        cf_n2o_field = "cf_n2o_ratio" if "cf_n2o_ratio" in model_fields else None
+
         lhv_field = "lhv_mj_per_kg" if "lhv_mj_per_kg" in model_fields else None
 
-        # cf (gCO2/gFuel or t/t - sen ne koyduysan DB'ye aynen yazar)
+        # cf (kg/kg gibi) - CSV ne veriyorsa
         cf_field = "cf_gco2_per_gfuel" if "cf_gco2_per_gfuel" in model_fields else None
 
         # wtw
@@ -87,6 +91,9 @@ class Command(BaseCommand):
                 if fuel_class_field:
                     defaults[fuel_class_field] = (row.get("fuel_class") or "").strip()
 
+                if fuel_group_field:
+                    defaults[fuel_group_field] = (row.get("fuel_group") or "").strip()
+
                 if lhv_field:
                     defaults[lhv_field] = d(row.get("lhv_mj_per_kg"))
 
@@ -101,6 +108,12 @@ class Command(BaseCommand):
 
                 if wtt_field:
                     defaults[wtt_field] = d(row.get("wtt_plus_nonco2_gco2e_per_mj"))
+
+                if cf_ch4_field:
+                    defaults[cf_ch4_field] = d(row.get("cf_ch4_ratio"))
+
+                if cf_n2o_field:
+                    defaults[cf_n2o_field] = d(row.get("cf_n2o_ratio"))
 
                 _, was_created = Fuel.objects.update_or_create(
                     **{key_field: key},

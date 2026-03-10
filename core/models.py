@@ -31,19 +31,41 @@ class Ship(models.Model):
 
 
 class Fuel(models.Model):
+    """
+    Default (reference) fuel factors used by the calculator.
+    Non-CO2 factors (CH4/N2O) are stored as ratios (kg gas / kg fuel).
+    """
+    FUEL_GROUP_CHOICES = [
+        ("FOSSIL", "Fossil"),
+        ("BIOFUEL", "Biofuel"),
+        ("RFNBO", "RFNBO"),
+        ("SHORE_POWER", "Shore power"),
+    ]
+
     fuel_class = models.CharField(max_length=100, blank=True, default="")
+    fuel_group = models.CharField(max_length=20, choices=FUEL_GROUP_CHOICES, blank=True, default="")
+
     fuel_type = models.CharField(max_length=255, unique=True)
 
     # MJ/kg
     lhv_mj_per_kg = models.DecimalField(max_digits=12, decimal_places=6)
 
-    # gCO2e/MJ
+    # gCO2e/MJ (legacy/overview value)
     wtw_total_gco2e_per_mj = models.DecimalField(max_digits=12, decimal_places=6)
 
     # opsiyonel alanlar
+    # cf (kg CO2 / kg fuel gibi) - CSV ne veriyorsa onu koyuyorsun
     cf_gco2_per_gfuel = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+
+    # gCO2/MJ (CO2 only)
     ttw_co2_gco2_per_mj = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+
+    # gCO2e/MJ (WTT + upstream non-CO2)
     wtt_plus_nonco2_gco2e_per_mj = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+
+    # --- NEW: default non-CO2 factors (kg gas / kg fuel) ---
+    cf_ch4_ratio = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    cf_n2o_ratio = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
 
     def __str__(self) -> str:
         return self.fuel_type
@@ -120,10 +142,7 @@ class VoyageLeg(models.Model):
         "LFO": ["LFO (Light Fuel Oil)", "LFO"],
         "MGO": ["MGO / MDO", "MGO", "MDO"],
         "VLSFO": ["VLSFO (Very Low Sulfur Fuel Oil)", "VLSFO"],
-
-        # LNG varyantlarını da ekle
-        "LNG": ["LNG", "LNG (Otto MS)", "LNG (Diesel SS)"],
-
+        "LNG": ["LNG", "LNG (Otto MS)", "LNG (Diesel SS)", "LNG (Certified actual)"],
     }
 
     def _build_fuel_amount_cache(self) -> dict[str, Decimal]:
@@ -209,9 +228,18 @@ class VoyageLeg(models.Model):
 
     @property
     def total_ghg_gco2e(self) -> Optional[Decimal]:
+        """
+        Total GHG (gCO2e), scoped by route factor.
+
+        - LNG: uses VoyageLegFuel fields for CH4/N2O (slip% and n2o_factor) as you already designed.
+        - Other fuels: now uses WTT + CO2 + default CH4/N2O from Fuel table.
+        """
         scope = self.scope_factor
         if scope is None:
             return None
+
+        GWP_CH4 = Decimal("28")
+        GWP_N2O = Decimal("265")
 
         total = Decimal("0")
 
@@ -224,55 +252,72 @@ class VoyageLeg(models.Model):
 
             ft_upper = (item.fuel.fuel_type or "").upper()
 
-            # LNG component hesap
-            # LNG component hesap
+            # LNG component
             if "LNG" in ft_upper:
-                GWP_CH4 = Decimal("28")
-                GWP_N2O = Decimal("265")
-
                 lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
                 if lhv == 0:
                     return None
 
-                # Enerji (scope'suz)
-                e_mj_raw = amt * lhv
+                e_mj_raw = amt * lhv  # scope'suz enerji
 
-                # A) WTT + upstream non-CO2 (g/MJ) -> DB'den
+                # WTT (g/MJ)
                 wtt_factor = item.fuel.wtt_plus_nonco2_gco2e_per_mj
                 if wtt_factor is None:
-                    # DB boşsa fallback (senin tablodaki LNG WTT)
                     wtt_factor = Decimal("18.5")
                 wtt_g = e_mj_raw * wtt_factor
 
-                # B) TTW CO2 (g/MJ) -> DB'den (varsa)
+                # CO2 (g/MJ) (yoksa cf üzerinden türet)
                 ttw_co2_factor = item.fuel.ttw_co2_gco2_per_mj
                 if ttw_co2_factor is None:
-                    # yoksa cf üzerinden türet
-                    cf = item.fuel.cf_gco2_per_gfuel or Decimal("0")  # gCO2/gFuel (kg/kg gibi)
-                    # cf burada "kg/kg" mantığında tutuluyorsa (2.75 gibi), g/kg'ye çevir
+                    cf = item.fuel.cf_gco2_per_gfuel or Decimal("0")
                     co2_g_per_kg = cf * Decimal("1000")
                     ttw_co2_factor = co2_g_per_kg / lhv
                 co2_g = e_mj_raw * ttw_co2_factor
 
-                # C) CH4 slip (%)
+                # CH4 slip (%) -> kg CH4
                 slip_pct = (item.ch4_slip_pct or Decimal("0"))
                 ch4_mass_kg = amt * (slip_pct / Decimal("100"))
                 ch4_g = ch4_mass_kg * GWP_CH4 * Decimal("1000")
 
-                # D) N2O factor (kg N2O / kg fuel)
+                # N2O factor (kg N2O / kg fuel)
                 n2o_factor = (item.n2o_factor or Decimal("0"))
                 n2o_mass_kg = amt * n2o_factor
                 n2o_g = n2o_mass_kg * GWP_N2O * Decimal("1000")
 
                 total += (wtt_g + co2_g + ch4_g + n2o_g) * scope
+                continue
 
-            else:
-                # diğer yakıtlar: g/MJ
-                try:
-                    e_mj = (amt * item.fuel.lhv_mj_per_kg) * scope
-                except (InvalidOperation, ZeroDivisionError):
+            # OTHER fuels: WTT + CO2 + default CH4/N2O
+            try:
+                lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
+                if lhv == 0:
                     return None
-                total += e_mj * item.fuel.wtw_total_gco2e_per_mj
+
+                e_mj_raw = amt * lhv  # scope'suz enerji
+
+                # WTT (g/MJ)
+                wtt_factor = item.fuel.wtt_plus_nonco2_gco2e_per_mj or Decimal("0")
+                wtt_g = e_mj_raw * wtt_factor
+
+                # CO2 (g/MJ) (yoksa cf üzerinden türet)
+                ttw_co2_factor = item.fuel.ttw_co2_gco2_per_mj
+                if ttw_co2_factor is None:
+                    cf = item.fuel.cf_gco2_per_gfuel or Decimal("0")
+                    co2_g_per_kg = cf * Decimal("1000")
+                    ttw_co2_factor = co2_g_per_kg / lhv
+                co2_g = e_mj_raw * ttw_co2_factor
+
+                # CH4 / N2O default ratios (kg gas / kg fuel)
+                ch4_ratio = item.fuel.cf_ch4_ratio or Decimal("0")
+                n2o_ratio = item.fuel.cf_n2o_ratio or Decimal("0")
+
+                ch4_g = (amt * ch4_ratio) * GWP_CH4 * Decimal("1000")
+                n2o_g = (amt * n2o_ratio) * GWP_N2O * Decimal("1000")
+
+                total += (wtt_g + co2_g + ch4_g + n2o_g) * scope
+
+            except (InvalidOperation, ZeroDivisionError):
+                return None
 
         return total
 
@@ -296,7 +341,6 @@ class VoyageLeg(models.Model):
             amt = item.amount_kg or Decimal("0")
             if amt == 0:
                 continue
-
             lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
             fuel_energy += (amt * lhv) * scope
 
@@ -330,10 +374,10 @@ class VoyageLegFuel(models.Model):
 
     lng_engine_mode = models.CharField(max_length=10, choices=LNG_ENGINE_CHOICES, null=True, blank=True)
 
-    # % slip
+    # % slip (ONLY LNG)
     ch4_slip_pct = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
 
-    # oran (kg N2O / kg fuel gibi)
+    # ratio (kg N2O / kg fuel) (ONLY LNG)
     n2o_factor = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
 
     class Meta:
@@ -367,11 +411,10 @@ class VoyageLegFuel(models.Model):
         elif "CERT" in ft or "CERTIFIED" in ft:
             auto_mode = "CERT"
 
-        # eğer yakaladık ise instance'a yaz
         if auto_mode:
             self.lng_engine_mode = auto_mode
 
-        # Certified actual seçeneği kullanıyorsan, o zaman kullanıcı slip/n2o girmeli
+        # Certified actual seçeneği: kullanıcı slip/n2o girmeli
         if self.lng_engine_mode == "CERT":
             if self.ch4_slip_pct is None:
                 raise ValidationError({"ch4_slip_pct": "Certified actual için CH4 slip girilmesi zorunlu."})
@@ -393,10 +436,13 @@ class VoyageLegFuel(models.Model):
         elif "CERT" in ft_upper or "CERTIFIED" in ft_upper:
             self.lng_engine_mode = "CERT"
         else:
-            # LNG ama isim yakalanmadıysa - boş bırakma, otto fallback (istersen)
             self.lng_engine_mode = "OTTO"
 
-        # Önceki fuel'u yakala (fuel değişince defaultlar yeniden basılsın)
+        # CERT: kullanıcı girecek, override ETME
+        if self.lng_engine_mode == "CERT":
+            return super().save(*args, **kwargs)
+
+        # Otto/Diesel defaultlarını bas (yeni kayıt veya fuel değişimi)
         prev_fuel_id = None
         if self.pk:
             prev_fuel_id = (
@@ -407,13 +453,6 @@ class VoyageLegFuel(models.Model):
             )
         fuel_changed = (prev_fuel_id is not None and prev_fuel_id != self.fuel_id)
 
-        # CERT: kullanıcı girecekse burada override ETME (istersen)
-        # Ama sen "hiç seçim olmasın, otomatik gelsin" diyorsun.
-        # CERT seçeneği kullanmayacaksan bu blok seni etkilemez.
-        if self.lng_engine_mode == "CERT":
-            return super().save(*args, **kwargs)
-
-        # Otto/Diesel defaultlarını bas (yeni kayıt veya fuel değişimi)
         if self._state.adding or fuel_changed:
             if self.lng_engine_mode == "OTTO":
                 self.ch4_slip_pct = Decimal("3.1")

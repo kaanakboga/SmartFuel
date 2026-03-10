@@ -1,15 +1,11 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="">
-    <meta name="author" content="">
-
-    <title>SB Admin 2 - Tables</title>
+    <title>Voyage Legs Report</title>
 
     <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" type="text/css">
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
@@ -19,7 +15,6 @@
 
 <body id="page-top">
 <div id="wrapper">
-
     {% include "partials/sidebar.html" %}
 
     <div id="content-wrapper" class="d-flex flex-column">
@@ -46,22 +41,12 @@
 
                 <ul class="navbar-nav ml-auto">
                     <div class="topbar-divider d-none d-sm-block"></div>
-
                     <li class="nav-item dropdown no-arrow">
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                             <span class="mr-2 d-none d-lg-inline text-gray-600 small">Kaan Akboga</span>
                             <img class="img-profile rounded-circle" src="{% static 'img/undraw_profile.svg' %}">
                         </a>
-                        <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in" aria-labelledby="userDropdown">
-                            <a class="dropdown-item" href="#"><i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>Profile</a>
-                            <a class="dropdown-item" href="#"><i class="fas fa-cogs fa-sm fa-fw mr-2 text-gray-400"></i>Settings</a>
-                            <a class="dropdown-item" href="#"><i class="fas fa-list fa-sm fa-fw mr-2 text-gray-400"></i>Activity Log</a>
-                            <div class="dropdown-divider"></div>
-                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#logoutModal">
-                                <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>Logout
-                            </a>
-                        </div>
                     </li>
                 </ul>
             </nav>
@@ -69,7 +54,7 @@
             <div class="container-fluid">
                 <h1 class="h3 mb-2 text-gray-800">Voyage Legs Report</h1>
                 <p class="mb-4">
-                    This page lists voyage legs and summarizes fuel amounts and energy (MJ) by fuel type.
+                    Fuel amounts, energy, total GHG and intensity (scoped by route type).
                 </p>
 
                 <div class="card shadow mb-4">
@@ -85,10 +70,10 @@
                                     <th>VRN</th>
                                     <th>Route Leg</th>
                                     <th>Route Leg Type</th>
-                                    <th>Departure D/T</th>
-                                    <th>Arrival D/T</th>
-                                    <th>Voyage Report Type Name</th>
+                                    <th>Departure</th>
+                                    <th>Arrival</th>
                                     <th>Distance</th>
+                                    <th>Scope</th>
 
                                     <th>Total HFO (kg)</th>
                                     <th>Total LFO (kg)</th>
@@ -101,32 +86,14 @@
                                     <th>MGO Energy (MJ)</th>
                                     <th>VLSFO Energy (MJ)</th>
                                     <th>LNG Energy (MJ)</th>
+
+                                    <th>Shore Power (MJ)</th>
+                                    <th>Total Energy (MJ)</th>
+
+                                    <th>Total GHG (tCO2e)</th>
+                                    <th>GHG Intensity (g/MJ)</th>
                                 </tr>
                                 </thead>
-
-                                <tfoot>
-                                <tr>
-                                    <th>VRN</th>
-                                    <th>Route Leg</th>
-                                    <th>Route Leg Type</th>
-                                    <th>Departure D/T</th>
-                                    <th>Arrival D/T</th>
-                                    <th>Voyage Report Type Name</th>
-                                    <th>Distance</th>
-
-                                    <th>Total HFO (kg)</th>
-                                    <th>Total LFO (kg)</th>
-                                    <th>Total MGO (kg)</th>
-                                    <th>Total VLSFO (kg)</th>
-                                    <th>Total LNG (kg)</th>
-
-                                    <th>HFO Energy (MJ)</th>
-                                    <th>LFO Energy (MJ)</th>
-                                    <th>MGO Energy (MJ)</th>
-                                    <th>VLSFO Energy (MJ)</th>
-                                    <th>LNG Energy (MJ)</th>
-                                </tr>
-                                </tfoot>
 
                                 <tbody>
                                 {% for leg in legs %}
@@ -134,23 +101,28 @@
                                         <td>{{ leg.vrn }}</td>
                                         <td>{{ leg.route_leg }}</td>
                                         <td>{{ leg.route_leg_type }}</td>
-                                        <td>{{ leg.departure_dt|date:"d/m/Y H:i:s" }}</td>
-                                        <td>{{ leg.arrival_dt|date:"d/m/Y H:i:s" }}</td>
+                                        <td>{{ leg.departure_dt }}</td>
+                                        <td>{{ leg.arrival_dt }}</td>
+                                        <td>{{ leg.distance }}</td>
+                                        <td>{{ leg.scope_factor }}</td>
 
-                                        <td>{% if leg.voyage_report_type_name %}{{ leg.voyage_report_type_name }}{% else %}-{% endif %}</td>
-                                        <td>{% if leg.distance %}{{ leg.distance|floatformat:3 }}{% else %}-{% endif %}</td>
+                                        <td>{{ leg.total_hfo_kg }}</td>
+                                        <td>{{ leg.total_lfo_kg }}</td>
+                                        <td>{{ leg.total_mgo_kg }}</td>
+                                        <td>{{ leg.total_vlsfo_kg }}</td>
+                                        <td>{{ leg.total_lng_kg }}</td>
 
-                                        <td>{{ leg.total_hfo_kg|floatformat:3 }}</td>
-                                        <td>{{ leg.total_lfo_kg|floatformat:3 }}</td>
-                                        <td>{{ leg.total_mgo_kg|floatformat:3 }}</td>
-                                        <td>{{ leg.total_vlsfo_kg|floatformat:3 }}</td>
-                                        <td>{{ leg.total_lng_kg|floatformat:3 }}</td>
+                                        <td>{{ leg.hfo_energy_mj }}</td>
+                                        <td>{{ leg.lfo_energy_mj }}</td>
+                                        <td>{{ leg.mgo_energy_mj }}</td>
+                                        <td>{{ leg.vlsfo_energy_mj }}</td>
+                                        <td>{{ leg.lng_energy_mj }}</td>
 
-                                        <td>{% if leg.hfo_energy_mj is not None %}{{ leg.hfo_energy_mj|floatformat:3 }}{% else %}-{% endif %}</td>
-                                        <td>{% if leg.lfo_energy_mj is not None %}{{ leg.lfo_energy_mj|floatformat:3 }}{% else %}-{% endif %}</td>
-                                        <td>{% if leg.mgo_energy_mj is not None %}{{ leg.mgo_energy_mj|floatformat:3 }}{% else %}-{% endif %}</td>
-                                        <td>{% if leg.vlsfo_energy_mj is not None %}{{ leg.vlsfo_energy_mj|floatformat:3 }}{% else %}-{% endif %}</td>
-                                        <td>{% if leg.lng_energy_mj is not None %}{{ leg.lng_energy_mj|floatformat:3 }}{% else %}-{% endif %}</td>
+                                        <td>{{ leg.shore_power_energy_mj }}</td>
+                                        <td>{{ leg.total_energy_mj_scoped }}</td>
+
+                                        <td>{{ leg.total_ghg_tco2e }}</td>
+                                        <td>{{ leg.ghg_intensity_g_per_mj }}</td>
                                     </tr>
                                 {% endfor %}
                                 </tbody>
@@ -166,30 +138,11 @@
         <footer class="sticky-footer bg-white">
             <div class="container my-auto">
                 <div class="copyright text-center my-auto">
-                    <span>Copyright &copy; Your Website 2020</span>
+                    <span>Copyright &copy; ShipControlPanel</span>
                 </div>
             </div>
         </footer>
-    </div>
-</div>
 
-<a class="scroll-to-top rounded" href="#page-top"><i class="fas fa-angle-up"></i></a>
-
-<div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="exampleModalLabel">Ready to Leave?</h5>
-                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">×</span>
-                </button>
-            </div>
-            <div class="modal-body">Select "Logout" below if you are ready to end your current session.</div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-                <a class="btn btn-primary" href="{% url 'login' %}">Login</a>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -199,6 +152,11 @@
 <script src="{% static 'js/sb-admin-2.min.js' %}"></script>
 <script src="{% static 'vendor/datatables/jquery.dataTables.min.js' %}"></script>
 <script src="{% static 'vendor/datatables/dataTables.bootstrap4.min.js' %}"></script>
-<script src="{% static 'js/demo/datatables-demo.js' %}"></script>
+
+<script>
+    $(document).ready(function () {
+        $('#dataTable').DataTable();
+    });
+</script>
 </body>
 </html>
