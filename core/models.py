@@ -5,6 +5,7 @@ from typing import Optional
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 
 class GeneralSetting(models.Model):
@@ -53,8 +54,7 @@ class Fuel(models.Model):
     # gCO2e/MJ (legacy/overview value)
     wtw_total_gco2e_per_mj = models.DecimalField(max_digits=12, decimal_places=6)
 
-    # opsiyonel alanlar
-    # cf (kg CO2 / kg fuel gibi) - CSV ne veriyorsa onu koyuyorsun
+    # cf (kg CO2 / kg fuel gibi) - CSV ne veriyorsa
     cf_gco2_per_gfuel = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
 
     # gCO2/MJ (CO2 only)
@@ -63,7 +63,7 @@ class Fuel(models.Model):
     # gCO2e/MJ (WTT + upstream non-CO2)
     wtt_plus_nonco2_gco2e_per_mj = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
 
-    # --- NEW: default non-CO2 factors (kg gas / kg fuel) ---
+    # default non-CO2 factors (kg gas / kg fuel)
     cf_ch4_ratio = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
     cf_n2o_ratio = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
 
@@ -98,15 +98,43 @@ class VoyageLeg(models.Model):
         max_digits=18, decimal_places=3, null=True, blank=True, default=0
     )
 
+    # Required intensity snapshot (gCO2e/MJ) -> kayıt anında sabitlenir
+    required_intensity_snapshot_g_per_mj = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     fuels = models.ManyToManyField(Fuel, through="VoyageLegFuel", related_name="voyage_legs")
+
+    # --- Required intensity schedule (DNV graph) ---
+    @staticmethod
+    def required_intensity_by_year(year: int) -> Decimal:
+        if 2025 <= year <= 2029:
+            return Decimal("89.34")
+        if 2030 <= year <= 2034:
+            return Decimal("85.69")
+        if 2035 <= year <= 2039:
+            return Decimal("77.94")
+        if 2040 <= year <= 2044:
+            return Decimal("62.90")
+        if 2045 <= year <= 2049:
+            return Decimal("34.64")
+        if year >= 2050:
+            return Decimal("18.23")
+        # 2024 ve öncesi: reference (2020 avg)
+        return Decimal("91.16")
 
     def save(self, *args, **kwargs):
         if not self.vrn:
             last = VoyageLeg.objects.order_by("-id").first()
             next_no = (last.id + 1) if last else 1
             self.vrn = f"UART-{next_no:06d}"
+
+        if self.required_intensity_snapshot_g_per_mj is None:
+            year = self.departure_dt.year if self.departure_dt else timezone.localdate().year
+            self.required_intensity_snapshot_g_per_mj = self.required_intensity_by_year(year)
+
         super().save(*args, **kwargs)
 
         if hasattr(self, "_fuel_amount_cache"):
@@ -130,12 +158,16 @@ class VoyageLeg(models.Model):
 
     @property
     def scope_factor(self) -> Optional[Decimal]:
+        """
+        Scope burada duruyor ama HAM enerji/GHG'de kullanılmaz.
+        Compliance balance hesabında eligible energy için kullanılır.
+        """
         t = self.route_leg_type
         if t == "EU/EU":
             return Decimal("1")
         if t in ("EU/non EU", "non EU/EU"):
             return Decimal("0.5")
-        return None
+        return None  # nonEU/nonEU => 0 eligible
 
     _FUEL_KEY_MAP = {
         "HFO": ["HFO (Heavy Fuel Oil)", "HFO"],
@@ -166,10 +198,9 @@ class VoyageLeg(models.Model):
         return self._fuel_amount_cache.get(key, Decimal("0"))
 
     def _fuel_energy_mj_by_key(self, key: str) -> Optional[Decimal]:
-        scope = self.scope_factor
-        if scope is None:
-            return None
-
+        """
+        HAM enerji (MJ). Scope yok.
+        """
         names = self._FUEL_KEY_MAP.get(key, [])
         if not names:
             return Decimal("0")
@@ -184,7 +215,7 @@ class VoyageLeg(models.Model):
                 lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
                 energy += (amt * lhv)
 
-        return energy * scope
+        return energy
 
     @property
     def total_hfo_kg(self) -> Decimal:
@@ -229,15 +260,9 @@ class VoyageLeg(models.Model):
     @property
     def total_ghg_gco2e(self) -> Optional[Decimal]:
         """
-        Total GHG (gCO2e), scoped by route factor.
-
-        - LNG: uses VoyageLegFuel fields for CH4/N2O (slip% and n2o_factor) as you already designed.
-        - Other fuels: now uses WTT + CO2 + default CH4/N2O from Fuel table.
+        HAM Total GHG (gCO2e). Scope yok.
+        Scope sadece compliance balance'ta eligible energy için uygulanacak.
         """
-        scope = self.scope_factor
-        if scope is None:
-            return None
-
         GWP_CH4 = Decimal("28")
         GWP_N2O = Decimal("265")
 
@@ -252,21 +277,19 @@ class VoyageLeg(models.Model):
 
             ft_upper = (item.fuel.fuel_type or "").upper()
 
-            # LNG component
+            # LNG component (WTT + TTW CO2 + CH4 + N2O)
             if "LNG" in ft_upper:
                 lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
                 if lhv == 0:
                     return None
 
-                e_mj_raw = amt * lhv  # scope'suz enerji
+                e_mj_raw = amt * lhv
 
-                # WTT (g/MJ)
                 wtt_factor = item.fuel.wtt_plus_nonco2_gco2e_per_mj
                 if wtt_factor is None:
                     wtt_factor = Decimal("18.5")
                 wtt_g = e_mj_raw * wtt_factor
 
-                # CO2 (g/MJ) (yoksa cf üzerinden türet)
                 ttw_co2_factor = item.fuel.ttw_co2_gco2_per_mj
                 if ttw_co2_factor is None:
                     cf = item.fuel.cf_gco2_per_gfuel or Decimal("0")
@@ -274,32 +297,28 @@ class VoyageLeg(models.Model):
                     ttw_co2_factor = co2_g_per_kg / lhv
                 co2_g = e_mj_raw * ttw_co2_factor
 
-                # CH4 slip (%) -> kg CH4
                 slip_pct = (item.ch4_slip_pct or Decimal("0"))
                 ch4_mass_kg = amt * (slip_pct / Decimal("100"))
                 ch4_g = ch4_mass_kg * GWP_CH4 * Decimal("1000")
 
-                # N2O factor (kg N2O / kg fuel)
                 n2o_factor = (item.n2o_factor or Decimal("0"))
                 n2o_mass_kg = amt * n2o_factor
                 n2o_g = n2o_mass_kg * GWP_N2O * Decimal("1000")
 
-                total += (wtt_g + co2_g + ch4_g + n2o_g) * scope
+                total += (wtt_g + co2_g + ch4_g + n2o_g)
                 continue
 
-            # OTHER fuels: WTT + CO2 + default CH4/N2O
+            # OTHER fuels: WTT + CO2 + CH4 + N2O (default)
             try:
                 lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
                 if lhv == 0:
                     return None
 
-                e_mj_raw = amt * lhv  # scope'suz enerji
+                e_mj_raw = amt * lhv
 
-                # WTT (g/MJ)
                 wtt_factor = item.fuel.wtt_plus_nonco2_gco2e_per_mj or Decimal("0")
                 wtt_g = e_mj_raw * wtt_factor
 
-                # CO2 (g/MJ) (yoksa cf üzerinden türet)
                 ttw_co2_factor = item.fuel.ttw_co2_gco2_per_mj
                 if ttw_co2_factor is None:
                     cf = item.fuel.cf_gco2_per_gfuel or Decimal("0")
@@ -307,14 +326,13 @@ class VoyageLeg(models.Model):
                     ttw_co2_factor = co2_g_per_kg / lhv
                 co2_g = e_mj_raw * ttw_co2_factor
 
-                # CH4 / N2O default ratios (kg gas / kg fuel)
                 ch4_ratio = item.fuel.cf_ch4_ratio or Decimal("0")
                 n2o_ratio = item.fuel.cf_n2o_ratio or Decimal("0")
 
                 ch4_g = (amt * ch4_ratio) * GWP_CH4 * Decimal("1000")
                 n2o_g = (amt * n2o_ratio) * GWP_N2O * Decimal("1000")
 
-                total += (wtt_g + co2_g + ch4_g + n2o_g) * scope
+                total += (wtt_g + co2_g + ch4_g + n2o_g)
 
             except (InvalidOperation, ZeroDivisionError):
                 return None
@@ -330,10 +348,10 @@ class VoyageLeg(models.Model):
 
     @property
     def total_energy_mj_scoped(self) -> Optional[Decimal]:
-        scope = self.scope_factor
-        if scope is None:
-            return None
-
+        """
+        HAM toplam enerji (MJ). Scope yok.
+        (İsim şimdilik aynı kalsın, template bozulmasın.)
+        """
         fuel_energy = Decimal("0")
         for item in self.fuel_items.select_related("fuel").all():
             if not item.fuel:
@@ -342,9 +360,9 @@ class VoyageLeg(models.Model):
             if amt == 0:
                 continue
             lhv = item.fuel.lhv_mj_per_kg or Decimal("0")
-            fuel_energy += (amt * lhv) * scope
+            fuel_energy += (amt * lhv)
 
-        shore = (self.shore_power_energy_mj or Decimal("0")) * scope
+        shore = (self.shore_power_energy_mj or Decimal("0"))
         return fuel_energy + shore
 
     @property
@@ -356,6 +374,53 @@ class VoyageLeg(models.Model):
         if g is None:
             return None
         return g / e
+
+    # -----------------------------
+    # Compliance (scope burada!)
+    # -----------------------------
+    @property
+    def required_ghg_intensity_g_per_mj(self) -> Optional[Decimal]:
+        """
+        Snapshot üzerinden gider.
+        Böylece ileride yıl değişince eski kayıt required intensity'si değişmez.
+        """
+        return self.required_intensity_snapshot_g_per_mj
+
+    @property
+    def eligible_energy_tj(self) -> Optional[Decimal]:
+        """
+        ΣEnergy[TJ] = (ham energy MJ) * scope / 1e6
+        scope: EU/EU=1, EU/nonEU veya nonEU/EU=0.5, nonEU/nonEU=0
+        """
+        scope = self.scope_factor
+        if scope is None:
+            return Decimal("0")
+
+        energy_mj = self.total_energy_mj_scoped
+        if energy_mj is None:
+            return None
+
+        return (energy_mj * scope) / Decimal("1000000")
+
+    @property
+    def compliance_balance_tco2e(self) -> Optional[Decimal]:
+        """
+        Compliance balance [tCO2e] =
+          (Required[g/MJ] - Actual[g/MJ]) * ΣEnergy[TJ]
+        """
+        tj = self.eligible_energy_tj
+        if tj is None or tj == 0:
+            return Decimal("0")
+
+        actual = self.ghg_intensity_g_per_mj
+        if actual is None:
+            return None
+
+        required = self.required_ghg_intensity_g_per_mj
+        if required is None:
+            return None
+
+        return (required - actual) * tj
 
     def __str__(self) -> str:
         return f"{self.vrn} {self.route_leg}"
@@ -390,7 +455,6 @@ class VoyageLegFuel(models.Model):
     def clean(self):
         super().clean()
 
-        # LNG değilse bu alanlar boş olmalı
         if not self.is_lng():
             if self.lng_engine_mode:
                 raise ValidationError({"lng_engine_mode": "Bu alan sadece LNG için kullanılabilir."})
@@ -400,7 +464,6 @@ class VoyageLegFuel(models.Model):
                 raise ValidationError({"n2o_factor": "Bu alan sadece LNG için kullanılabilir."})
             return
 
-        # LNG ise engine mode fuel_type'tan otomatik belirleniyor.
         ft = ((self.fuel.fuel_type or "") if self.fuel else "").upper()
 
         auto_mode = None
@@ -414,21 +477,18 @@ class VoyageLegFuel(models.Model):
         if auto_mode:
             self.lng_engine_mode = auto_mode
 
-        # Certified actual seçeneği: kullanıcı slip/n2o girmeli
         if self.lng_engine_mode == "CERT":
             if self.ch4_slip_pct is None:
-                raise ValidationError({"ch4_slip_pct": "Certified actual için CH4 slip girilmesi zorunlu."})
+                raise ValidationError({"ch4_slip_pct": "Certified actual için CH4 slip zorunlu."})
             if self.n2o_factor is None:
-                raise ValidationError({"n2o_factor": "Certified actual için N2O factor girilmesi zorunlu."})
+                raise ValidationError({"n2o_factor": "Certified actual için N2O factor zorunlu."})
 
     def save(self, *args, **kwargs):
-        # LNG değilse direkt kaydet
         if not self.is_lng():
             return super().save(*args, **kwargs)
 
         ft_upper = ((self.fuel.fuel_type or "") if self.fuel else "").upper()
 
-        # Fuel'dan engine mode'u otomatik belirle
         if "DIESEL" in ft_upper:
             self.lng_engine_mode = "DIESEL"
         elif "OTTO" in ft_upper:
@@ -438,18 +498,13 @@ class VoyageLegFuel(models.Model):
         else:
             self.lng_engine_mode = "OTTO"
 
-        # CERT: kullanıcı girecek, override ETME
         if self.lng_engine_mode == "CERT":
             return super().save(*args, **kwargs)
 
-        # Otto/Diesel defaultlarını bas (yeni kayıt veya fuel değişimi)
         prev_fuel_id = None
         if self.pk:
             prev_fuel_id = (
-                VoyageLegFuel.objects
-                .filter(pk=self.pk)
-                .values_list("fuel_id", flat=True)
-                .first()
+                VoyageLegFuel.objects.filter(pk=self.pk).values_list("fuel_id", flat=True).first()
             )
         fuel_changed = (prev_fuel_id is not None and prev_fuel_id != self.fuel_id)
 

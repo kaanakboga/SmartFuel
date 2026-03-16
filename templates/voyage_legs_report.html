@@ -92,6 +92,10 @@
 
                                     <th>Total GHG (tCO2e)</th>
                                     <th>GHG Intensity (g/MJ)</th>
+
+                                    <th>Required (g/MJ)</th>
+<th>Eligible Energy (TJ)</th>
+<th>Compliance Balance (tCO2e)</th>
                                 </tr>
                                 </thead>
 
@@ -123,6 +127,9 @@
 
                                         <td>{{ leg.total_ghg_tco2e }}</td>
                                         <td>{{ leg.ghg_intensity_g_per_mj }}</td>
+                                    <td>{{ leg.required_ghg_intensity_g_per_mj }}</td>
+<td>{{ leg.eligible_energy_tj }}</td>
+<td>{{ leg.compliance_balance_tco2e }}</td>
                                     </tr>
                                 {% endfor %}
                                 </tbody>
