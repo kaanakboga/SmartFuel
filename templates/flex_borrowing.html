@@ -1,0 +1,76 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>Flexibility - Borrowing</title>
+
+  <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" type="text/css">
+  <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
+  <link href="{% static 'css/sb-admin-2.min.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/datatables/dataTables.bootstrap4.min.css' %}" rel="stylesheet">
+</head>
+
+<body id="page-top">
+<div id="wrapper">
+  {% include "partials/sidebar.html" %}
+
+  <div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+      <div class="container-fluid">
+        <h1 class="h3 mb-2 text-gray-800">Flexibility - Borrowing</h1>
+        <p class="mb-4">Voyage legs with negative Compliance Balance (deficit).</p>
+
+        <div class="card shadow mb-4">
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                <thead>
+                <tr>
+                  <th>VRN</th>
+                  <th>Route</th>
+                  <th>Route Type</th>
+                  <th>Departure</th>
+                  <th>Total Energy (MJ)</th>
+                  <th>GHG Intensity (g/MJ)</th>
+                  <th>Required (g/MJ)</th>
+                  <th>Eligible Energy (TJ)</th>
+                  <th>Compliance Balance (tCO2e)</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for leg in legs %}
+                  <tr>
+                    <td>{{ leg.vrn }}</td>
+                    <td>{{ leg.route_leg }}</td>
+                    <td>{{ leg.route_leg_type }}</td>
+                    <td>{{ leg.departure_dt }}</td>
+                    <td>{{ leg.total_energy_mj_scoped }}</td>
+                    <td>{{ leg.ghg_intensity_g_per_mj }}</td>
+                    <td>{{ leg.required_ghg_intensity_g_per_mj }}</td>
+                    <td>{{ leg.eligible_energy_tj }}</td>
+                    <td>{{ leg.compliance_balance_tco2e }}</td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
+<script src="{% static 'js/sb-admin-2.min.js' %}"></script>
+<script src="{% static 'vendor/datatables/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'vendor/datatables/dataTables.bootstrap4.min.js' %}"></script>
+<script src="{% static 'js/demo/datatables-demo.js' %}"></script>
+</body>
+</html>

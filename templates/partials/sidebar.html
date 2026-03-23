@@ -66,6 +66,7 @@
     </a>
   </li>
 
+  <!-- TABLES -->
   <li class="nav-item">
     <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseTables"
        aria-expanded="true" aria-controls="collapseTables">
@@ -74,12 +75,31 @@
     </a>
     <div id="collapseTables" class="collapse" aria-labelledby="headingTables" data-parent="#accordionSidebar">
       <div class="bg-white py-2 collapse-inner rounded">
-  <h6 class="collapse-header">Data Tables:</h6>
-  <a class="collapse-item" href="{% url 'tables' %}">Ships</a>
-  <a class="collapse-item" href="{% url 'voyage_legs' %}">Route Legs</a>
-  <a class="collapse-item" href="{% url 'voyage_legs_report' %}">Voyage Report</a>
-  <a class="collapse-item" href="{% url 'fuels_reference' %}">Fuel Reference</a>
-</div>
+        <h6 class="collapse-header">Data Tables:</h6>
+        <a class="collapse-item" href="{% url 'tables' %}">Ships</a>
+        <a class="collapse-item" href="{% url 'voyage_legs' %}">Route Legs</a>
+        <a class="collapse-item" href="{% url 'voyage_legs_report' %}">Voyage Report</a>
+        <a class="collapse-item" href="{% url 'fuels_reference' %}">Fuel Reference</a>
+      </div>
+    </div>
+  </li>
+
+  <!-- FLEXIBILITY (NEW) -->
+  <li class="nav-item">
+    <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseFlexibility"
+       aria-expanded="true" aria-controls="collapseFlexibility">
+      <i class="fas fa-fw fa-layer-group"></i>
+      <span>Flexibility</span>
+    </a>
+    <div id="collapseFlexibility" class="collapse" aria-labelledby="headingFlexibility" data-parent="#accordionSidebar">
+      <div class="bg-white py-2 collapse-inner rounded">
+        <h6 class="collapse-header">Flex Mechanisms:</h6>
+
+        <a class="collapse-item" href="{% url 'flex_banking' %}">Banking</a>
+        <a class="collapse-item" href="{% url 'flex_borrowing' %}">Borrowing</a>
+        <a class="collapse-item" href="{% url 'flex_pooling' %}">Pooling</a>
+          <a class="collapse-item" href="{% url 'flex_history' %}">History</a>
+      </div>
     </div>
   </li>
 

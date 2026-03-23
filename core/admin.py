@@ -1,6 +1,8 @@
 from django.contrib import admin
 from .models import GeneralSetting, Ship, Port, Fuel, VoyageLeg, VoyageLegFuel
 from django.contrib.admin.sites import site
+from .models import ComplianceHistory
+
 
 @admin.register(GeneralSetting)
 class GeneralSettingAdmin(admin.ModelAdmin):
@@ -73,11 +75,19 @@ class VoyageLegAdmin(admin.ModelAdmin):
     readonly_fields = ("vrn",)
 
     inlines = [VoyageLegFuelInline]
+    # VoyageLegAdmin içinde:
+    list_display = ("vrn", "ship", "departure_port", "arrival_port", "departure_dt")
 
 # Global admin JS (inline Media bazen yüklenmiyor, bunu kesin yükler)
 class AdminGlobalMedia:
     class Media:
         js = ("core/js/voyage_leg_fuel_inline_toggle.js",)
+
+@admin.register(ComplianceHistory)
+class ComplianceHistoryAdmin(admin.ModelAdmin):
+    list_display = ("ship", "year", "action_taken", "final_balance_tco2e", "penalty_multiplier_level", "penalty_multiplier", "penalty_eur")
+    list_filter = ("action_taken", "year", "ship")
+    search_fields = ("ship__name",)
 
 site._global_media = AdminGlobalMedia.Media
 # IMPORTANT:

@@ -29,6 +29,11 @@ urlpatterns = [
     path("voyage-legs/", views.voyage_legs_table, name="voyage_legs"),
     path("voyage-legs-report/", views.voyage_legs_report_table, name="voyage_legs_report"),
 
-    # NEW: fuel reference table page
     path("fuels-reference/", views.fuels_reference_table, name="fuels_reference"),
+
+    # FLEXIBILITY (NEW)
+    path("flexibility/banking/", views.flex_banking_table, name="flex_banking"),
+    path("flexibility/borrowing/", views.flex_borrowing_table, name="flex_borrowing"),
+    path("flexibility/pooling/", views.flex_pooling_table, name="flex_pooling"),
+    path("flexibility/history/", views.flex_history_table, name="flex_history"),
 ]

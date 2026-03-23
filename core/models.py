@@ -8,6 +8,7 @@ from django.db import models
 from django.utils import timezone
 
 
+
 class GeneralSetting(models.Model):
     name = models.CharField(default="", max_length=255, blank=True)
     description = models.CharField(default="", max_length=254, blank=True)
@@ -425,6 +426,42 @@ class VoyageLeg(models.Model):
     def __str__(self) -> str:
         return f"{self.vrn} {self.route_leg}"
 
+    @property
+    def penalty_eur(self):
+        """
+        Penalty (€) – compliance deficit (CB < 0) varsa hesaplanır.
+
+        Formula (görsel):
+          Penalty[€] = |CB[tCO2e]| / ActualIntensity[g/MJ] * (2400 €/tVLSFOeq) / (41000 MJ/tVLSFOeq)
+                       * (1 + (consecutive_periods - 1)/10)
+
+        2400/41000 €/MJ = 58536.585... €/TJ  -> dokümanda 58,537 €/TJ
+        """
+        cb = self.compliance_balance_tco2e
+        if cb is None:
+            return None
+
+        # Borç yoksa ceza yok
+        if cb >= 0:
+            return Decimal("0")
+
+        actual_intensity = self.ghg_intensity_g_per_mj
+        if actual_intensity is None or actual_intensity == 0:
+            return None
+
+        PENALTY_EUR_PER_TJ = Decimal("58537")
+
+        # consecutive periods şimdilik 1 (ship-year takibi gelince güncellenecek)
+        consecutive_periods = 1
+        multiplier = Decimal("1") + (Decimal(consecutive_periods - 1) / Decimal("10"))
+
+        try:
+            return (abs(cb) * PENALTY_EUR_PER_TJ / actual_intensity) * multiplier
+        except (InvalidOperation, ZeroDivisionError):
+            return None
+
+    ship = models.ForeignKey("Ship", on_delete=models.PROTECT, related_name="voyage_legs", null=True, blank=True)
+
 
 class VoyageLegFuel(models.Model):
     voyage_leg = models.ForeignKey(VoyageLeg, on_delete=models.CASCADE, related_name="fuel_items")
@@ -520,3 +557,59 @@ class VoyageLegFuel(models.Model):
 
     def __str__(self) -> str:
         return f"{self.voyage_leg.vrn} - {self.fuel.fuel_type} ({self.amount_kg} kg)"
+
+class ComplianceHistory(models.Model):
+    ACTION_CHOICES = [
+        ("COMPLIANT", "Compliant"),
+        ("BANK", "Banking"),
+        ("BORROW", "Borrowing"),
+        ("POOL", "Pooling"),
+        ("PENALTY", "Penalty Paid"),
+    ]
+
+    ship = models.ForeignKey(Ship, on_delete=models.CASCADE, related_name="compliance_history")
+    year = models.IntegerField()
+
+    # yıl kapanışındaki net bakiye (tCO2e)
+    final_balance_tco2e = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal("0"))
+
+    action_taken = models.CharField(max_length=20, choices=ACTION_CHOICES, default="COMPLIANT")
+
+    # ardışık ceza seviyesi (0=ceza yok, 1=ilk ceza yılı, 2=ikinci ardışık, ...)
+    penalty_multiplier_level = models.IntegerField(default=0)
+
+    # 1.00, 1.10, 1.20 ...
+    penalty_multiplier = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("1.00"))
+
+    penalty_eur = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("ship", "year")
+        ordering = ["-year", "ship_id"]
+
+    def __str__(self):
+        return f"{self.ship.name} - {self.year} - {self.action_taken}"
+
+    @staticmethod
+    def compute_multiplier_for_ship_year(ship_id: int, year: int, current_action: str):
+        """
+        consecutive penalty mantığı:
+        - bu yıl PENALTY ise:
+            - geçen yıl da PENALTY ise level+1
+            - değilse level=1
+        - bu yıl PENALTY değilse zincir kırılır: level=0, multiplier=1.00
+        """
+        if current_action != "PENALTY":
+            return 0, Decimal("1.00")
+
+        prev = ComplianceHistory.objects.filter(ship_id=ship_id, year=year - 1).first()
+        if prev and prev.action_taken == "PENALTY":
+            level = (prev.penalty_multiplier_level or 1) + 1
+        else:
+            level = 1
+
+        multiplier = Decimal("1.00") + (Decimal(level - 1) * Decimal("0.10"))
+        return level, multiplier
+

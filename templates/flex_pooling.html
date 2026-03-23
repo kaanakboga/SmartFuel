@@ -1,0 +1,137 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>Flexibility - Pooling</title>
+
+  <link href="{% static 'vendor/fontawesome-free/css/all.min.css' %}" rel="stylesheet" type="text/css">
+  <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
+  <link href="{% static 'css/sb-admin-2.min.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/datatables/dataTables.bootstrap4.min.css' %}" rel="stylesheet">
+</head>
+
+<body id="page-top">
+<div id="wrapper">
+  {% include "partials/sidebar.html" %}
+
+  <div id="content-wrapper" class="d-flex flex-column">
+    <div id="content">
+      <div class="container-fluid">
+        <h1 class="h3 mb-2 text-gray-800">Flexibility - Pooling</h1>
+        <p class="mb-4">Select voyage legs (VRNs) and simulate whether the pool total balance stays non-negative.</p>
+
+        <!-- RESULT CARD -->
+        <div class="card shadow mb-4">
+          <div class="card-body">
+            {% if pool_valid is None %}
+              <div class="text-muted">Select some rows and click "Simulate Pool".</div>
+            {% else %}
+              {% if pool_valid %}
+                <div class="alert alert-success mb-0">
+                  Pool valid. Total compliance balance is non-negative.
+                </div>
+              {% else %}
+                <div class="alert alert-danger mb-0">
+                  Pool invalid. Total compliance balance is still negative.
+                </div>
+              {% endif %}
+
+              <hr>
+
+              <div class="row">
+                <div class="col-md-4">
+                  <strong>Selected legs:</strong> {{ selected_legs|length }}
+                </div>
+                <div class="col-md-4">
+                  <strong>Total Eligible Energy (TJ):</strong> {{ total_eligible_tj|floatformat:6 }}
+                </div>
+                <div class="col-md-4">
+                  <strong>Total Compliance Balance (tCO2e):</strong> {{ total_cb|floatformat:6 }}
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- TABLE + FORM -->
+        <div class="card shadow mb-4">
+          <div class="card-body">
+            <form method="post">
+              {% csrf_token %}
+
+              <div class="mb-3">
+                <button type="submit" class="btn btn-primary">
+                  Simulate Pool
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="toggleAll(true)">Select all</button>
+                <button type="button" class="btn btn-secondary" onclick="toggleAll(false)">Clear</button>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                  <thead>
+                  <tr>
+                    <th>Select</th>
+                    <th>VRN</th>
+                    <th>Route</th>
+                    <th>Route Type</th>
+                    <th>Departure</th>
+                    <th>Total Energy (MJ)</th>
+                    <th>GHG Intensity (g/MJ)</th>
+                    <th>Required (g/MJ)</th>
+                    <th>Eligible Energy (TJ)</th>
+                    <th>Compliance Balance (tCO2e)</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {% for leg in legs %}
+                    <tr>
+                      <td style="text-align:center;">
+                        <input
+                          type="checkbox"
+                          name="selected_leg_id"
+                          value="{{ leg.id }}"
+                          {% if selected_ids and leg.id|stringformat:"s" in selected_ids %}checked{% endif %}
+                        >
+                      </td>
+                      <td>{{ leg.vrn }}</td>
+                      <td>{{ leg.route_leg }}</td>
+                      <td>{{ leg.route_leg_type }}</td>
+                      <td>{{ leg.departure_dt }}</td>
+                      <td>{{ leg.total_energy_mj_scoped }}</td>
+                      <td>{{ leg.ghg_intensity_g_per_mj }}</td>
+                      <td>{{ leg.required_ghg_intensity_g_per_mj }}</td>
+                      <td>{{ leg.eligible_energy_tj }}</td>
+                      <td>{{ leg.compliance_balance_tco2e }}</td>
+                    </tr>
+                  {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'vendor/jquery-easing/jquery.easing.min.js' %}"></script>
+<script src="{% static 'js/sb-admin-2.min.js' %}"></script>
+<script src="{% static 'vendor/datatables/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'vendor/datatables/dataTables.bootstrap4.min.js' %}"></script>
+<script src="{% static 'js/demo/datatables-demo.js' %}"></script>
+
+<script>
+  function toggleAll(state) {
+    document.querySelectorAll('input[name="selected_leg_id"]').forEach(cb => cb.checked = state);
+  }
+</script>
+</body>
+</html>
