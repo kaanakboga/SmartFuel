@@ -24,7 +24,6 @@ class Ship(models.Model):
     name = models.CharField(max_length=255)
     ship_type = models.CharField(max_length=255)
     gt = models.IntegerField()
-    fuel_type = models.CharField(max_length=255)
     emission_level = models.DecimalField(max_digits=10, decimal_places=2)
     compliance_strategy = models.CharField(max_length=255)
 
@@ -176,6 +175,11 @@ class VoyageLeg(models.Model):
         "MGO": ["MGO / MDO", "MGO", "MDO"],
         "VLSFO": ["VLSFO (Very Low Sulfur Fuel Oil)", "VLSFO"],
         "LNG": ["LNG", "LNG (Otto MS)", "LNG (Diesel SS)", "LNG (Certified actual)"],
+        "FAME": ["FAME_Waste_Oil"],
+        "HVO": ["HVO_Forest_Residue"],
+        "BIO_LNG": ["Bio_LNG"],
+        "BIO_METHANOL": ["Bio_Methanol"],
+        "NON_CERT_BIO": ["Non_Certified_Bio"],
     }
 
     def _build_fuel_amount_cache(self) -> dict[str, Decimal]:
@@ -257,6 +261,46 @@ class VoyageLeg(models.Model):
     @property
     def lng_energy_mj(self):
         return self._fuel_energy_mj_by_key("LNG")
+
+    @property
+    def total_fame_kg(self) -> Decimal:
+        return self._fuel_amount_kg_by_key("FAME")
+
+    @property
+    def total_hvo_kg(self) -> Decimal:
+        return self._fuel_amount_kg_by_key("HVO")
+
+    @property
+    def total_bio_lng_kg(self) -> Decimal:
+        return self._fuel_amount_kg_by_key("BIO_LNG")
+
+    @property
+    def total_bio_methanol_kg(self) -> Decimal:
+        return self._fuel_amount_kg_by_key("BIO_METHANOL")
+
+    @property
+    def total_non_cert_bio_kg(self) -> Decimal:
+        return self._fuel_amount_kg_by_key("NON_CERT_BIO")
+
+    @property
+    def fame_energy_mj(self) -> Optional[Decimal]:
+        return self._fuel_energy_mj_by_key("FAME")
+
+    @property
+    def hvo_energy_mj(self) -> Optional[Decimal]:
+        return self._fuel_energy_mj_by_key("HVO")
+
+    @property
+    def bio_lng_energy_mj(self) -> Optional[Decimal]:
+        return self._fuel_energy_mj_by_key("BIO_LNG")
+
+    @property
+    def bio_methanol_energy_mj(self) -> Optional[Decimal]:
+        return self._fuel_energy_mj_by_key("BIO_METHANOL")
+
+    @property
+    def non_cert_bio_energy_mj(self) -> Optional[Decimal]:
+        return self._fuel_energy_mj_by_key("NON_CERT_BIO")
 
     @property
     def total_ghg_gco2e(self) -> Optional[Decimal]:

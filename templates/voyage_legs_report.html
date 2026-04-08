@@ -62,43 +62,50 @@
                         <h6 class="m-0 font-weight-bold text-primary">Voyage Legs Report Table</h6>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
-
-                            <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+<div class="table-responsive" style="overflow-x: auto;">
+    <table class="table table-bordered nowrap" id="dataTable" width="100%" cellspacing="0">
                                 <thead>
-                                <tr>
-                                    <th>VRN</th>
-                                    <th>Route Leg</th>
-                                    <th>Route Leg Type</th>
-                                    <th>Departure</th>
-                                    <th>Arrival</th>
-                                    <th>Distance</th>
-                                    <th>Scope</th>
+<tr>
+    <th>VRN</th>
+    <th>Route Leg</th>
+    <th>Route Leg Type</th>
+    <th>Departure</th>
+    <th>Arrival</th>
+    <th>Distance</th>
+    <th>Scope</th>
 
-                                    <th>Total HFO (kg)</th>
-                                    <th>Total LFO (kg)</th>
-                                    <th>Total MGO (kg)</th>
-                                    <th>Total VLSFO (kg)</th>
-                                    <th>Total LNG (kg)</th>
+    <th>Total HFO (kg)</th>
+    <th>Total LFO (kg)</th>
+    <th>Total MGO (kg)</th>
+    <th>Total VLSFO (kg)</th>
+    <th>Total LNG (kg)</th>
+    <th>Total FAME (kg)</th>
+    <th>Total HVO (kg)</th>
+    <th>Total Bio-LNG (kg)</th>
+    <th>Total Bio-Methanol (kg)</th>
+    <th>Total Non-Certified Bio (kg)</th>
 
-                                    <th>HFO Energy (MJ)</th>
-                                    <th>LFO Energy (MJ)</th>
-                                    <th>MGO Energy (MJ)</th>
-                                    <th>VLSFO Energy (MJ)</th>
-                                    <th>LNG Energy (MJ)</th>
+    <th>HFO Energy (MJ)</th>
+    <th>LFO Energy (MJ)</th>
+    <th>MGO Energy (MJ)</th>
+    <th>VLSFO Energy (MJ)</th>
+    <th>LNG Energy (MJ)</th>
+    <th>FAME Energy (MJ)</th>
+    <th>HVO Energy (MJ)</th>
+    <th>Bio-LNG Energy (MJ)</th>
+    <th>Bio-Methanol Energy (MJ)</th>
+    <th>Non-Certified Bio Energy (MJ)</th>
 
-                                    <th>Shore Power (MJ)</th>
-                                    <th>Total Energy (MJ)</th>
-
-                                    <th>Total GHG (tCO2e)</th>
-                                    <th>GHG Intensity (g/MJ)</th>
-
-                                    <th>Required (g/MJ)</th>
-<th>Eligible Energy (TJ)</th>
-<th>Compliance Balance (tCO2e)</th>
-                                    <th>Penalty (€)</th>
-                                </tr>
-                                </thead>
+    <th>Shore Power (MJ)</th>
+    <th>Total Energy (MJ)</th>
+    <th>Total GHG (tCO2e)</th>
+    <th>GHG Intensity (g/MJ)</th>
+    <th>Required (g/MJ)</th>
+    <th>Eligible Energy (TJ)</th>
+    <th>Compliance Balance (tCO2e)</th>
+    <th>Penalty (€)</th>
+</tr>
+</thead>
 
                                 <tbody>
                                 {% for leg in legs %}
@@ -116,12 +123,22 @@
                                         <td>{{ leg.total_mgo_kg }}</td>
                                         <td>{{ leg.total_vlsfo_kg }}</td>
                                         <td>{{ leg.total_lng_kg }}</td>
+                                    <td>{{ leg.total_fame_kg }}</td>
+<td>{{ leg.total_hvo_kg }}</td>
+<td>{{ leg.total_bio_lng_kg }}</td>
+<td>{{ leg.total_bio_methanol_kg }}</td>
+<td>{{ leg.total_non_cert_bio_kg }}</td>
 
                                         <td>{{ leg.hfo_energy_mj }}</td>
                                         <td>{{ leg.lfo_energy_mj }}</td>
                                         <td>{{ leg.mgo_energy_mj }}</td>
                                         <td>{{ leg.vlsfo_energy_mj }}</td>
                                         <td>{{ leg.lng_energy_mj }}</td>
+                                    <td>{{ leg.fame_energy_mj }}</td>
+<td>{{ leg.hvo_energy_mj }}</td>
+<td>{{ leg.bio_lng_energy_mj }}</td>
+<td>{{ leg.bio_methanol_energy_mj }}</td>
+<td>{{ leg.non_cert_bio_energy_mj }}</td>
 
                                         <td>{{ leg.shore_power_energy_mj }}</td>
                                         <td>{{ leg.total_energy_mj_scoped }}</td>

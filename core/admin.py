@@ -12,9 +12,9 @@ class GeneralSettingAdmin(admin.ModelAdmin):
 
 @admin.register(Ship)
 class ShipAdmin(admin.ModelAdmin):
-    list_display = ("name", "ship_type", "gt", "fuel_type", "emission_level", "compliance_strategy")
-    search_fields = ("name", "ship_type", "fuel_type")
-    list_filter = ("fuel_type", "compliance_strategy")
+    list_display = ("name", "ship_type", "gt", "emission_level", "compliance_strategy")
+    search_fields = ("name", "ship_type")
+    list_filter = ("compliance_strategy",)
 
 
 @admin.register(Port)
@@ -59,8 +59,11 @@ class VoyageLegFuelInline(admin.StackedInline):
 class VoyageLegAdmin(admin.ModelAdmin):
     list_display = (
         "vrn",
+        "ship",
         "route_leg",
         "route_leg_type",
+        "departure_port",
+        "arrival_port",
         "departure_dt",
         "arrival_dt",
         "scope_factor",
@@ -68,12 +71,9 @@ class VoyageLegAdmin(admin.ModelAdmin):
         "total_ghg_tco2e",
         "ghg_intensity_g_per_mj",
     )
-    search_fields = ("vrn", "departure_port__code", "arrival_port__code")
+    search_fields = ("vrn", "departure_port__code", "arrival_port__code", "ship__name")
     list_filter = ("departure_port__is_eu", "arrival_port__is_eu")
-
-    # VRN otomatik üretiliyor; kullanıcı elle girmesin
     readonly_fields = ("vrn",)
-
     inlines = [VoyageLegFuelInline]
     # VoyageLegAdmin içinde:
     list_display = ("vrn", "ship", "departure_port", "arrival_port", "departure_dt")
