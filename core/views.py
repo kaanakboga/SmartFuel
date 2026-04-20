@@ -120,41 +120,21 @@ def flex_borrowing_table(request):
 
 
 def flex_pooling_table(request):
-    legs = list(_flex_base_queryset())
+    selected_ids = request.POST.getlist('selected_leg_id')
+    legs = VoyageLeg.objects.filter(id__in=selected_ids)
 
-    selected_ids = []
-    selected_legs = []
-    total_cb = 0
-    total_eligible_tj = 0
+    total_balance = sum(l.compliance_balance_tco2e for l in legs)
+    total_energy = sum(l.eligible_energy_tj for l in legs)
 
-    if request.method == "POST":
-        selected_ids = request.POST.getlist("selected_leg_id")
+    # Pool sonrası yeni emisyon yoğunluğu
+    # Intensity = (Standard_Intensity * Total_Energy - Total_Balance) / Total_Energy
+    # Eğer balance pozitifse intensity düşer, negatifse artar.
 
-        # seçilenleri bul
-        id_set = set(int(x) for x in selected_ids if x.isdigit())
-        selected_legs = [l for l in legs if l.id in id_set]
-
-        # toplamları hesapla
-        for l in selected_legs:
-            cb = l.compliance_balance_tco2e
-            tj = l.eligible_energy_tj
-
-            if cb is not None:
-                total_cb += float(cb)
-            if tj is not None:
-                total_eligible_tj += float(tj)
-
-    context = {
+    return render(request, "flex_pooling.html", {
         "legs": legs,
-        "selected_ids": [str(x) for x in selected_ids],
-        "selected_legs": selected_legs,
-        "total_cb": total_cb,
-        "total_eligible_tj": total_eligible_tj,
-        "pool_valid": (total_cb >= 0) if selected_legs else None,
-    }
-    return render(request, "flex_pooling.html", context)
-
-
+        "pool_balance": total_balance,
+        "is_compliant": total_balance >= 0
+    })
 def flex_history_table(request):
     from decimal import Decimal
 
